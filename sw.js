@@ -13,5 +13,15 @@ self.addEventListener('activate',(e)=>{
 
 self.addEventListener('fetch',(e)=>{
     console.log(e.request)
-    e.respondWith(fetch(e.request))
+    if(e.request.url.includes('gatito.jpg'))
+    e.respondWith(fetch('img/gatitomiel.jpg'))
+    else e.respondWith(fetch(e.request))
+})
+
+self.addEventListener('push',(e)=>{
+    console.log('Notificacion push')
+})
+
+self.addEventListener('sync',(e)=>{
+    console.log('sync event')
 })
