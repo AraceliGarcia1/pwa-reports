@@ -73,17 +73,40 @@ self.addEventListener('fetch',(e)=>{
     //siempre actualizada si hay recurso actualizado devuelve el actual pero lo actualiza al instante
     //usarla cuando tenga un rendimiento critico, si el rendimiento es bajo utilizar esta estrategia
     //Desventaja es que toda la app esta un paso atras. 
-    if(e.request.url.includes('boostrap'))
-    return e.respondWith(caches.match(e.request));
-    const source= caches.open(STATIC).then(cache=>{
+    // if(e.request.url.includes('boostrap'))
+    // return e.respondWith(caches.match(e.request));
+    // const source= caches.open(STATIC).then(cache=>{
+    //     fetch(e.request).then(res=>{
+    //         cache.put(e.request, res)
+    //     })
+    //     return cache.match(e.request);
+    // });
+    // e.respondWith(source);
+
+    //Cache and network race
+    const source= new Promise((resolve, reject)=>{
+        let reject= false;
+        const failsOnce=()=>{
+            if(reject){
+                if(/\.(png|jpg))/i.test(e.request.url)){
+                    resolve(caches.match('/img/not-found.png'))
+                }else{
+                    reject('SourceNotFound')
+                }
+
+            }else{
+                reject=true;
+            }
+        };
         fetch(e.request).then(res=>{
-            cache.put(e.request, res)
+            res.ok ? resolve(res): failsOnce();
+        }).catch(failsOnce);
+        caches.match(e.request).then(cacheRes=>{
+            cacheRes.ok ? resolve(cacheRes): failsOnce();
         })
-        return cache.match(e.request);
-    });
-    e.respondWith(source);
-
-
+        .catch(failsOnce);
+    })
+        e.respondWith(source);
 })
 
 // self.addEventListener('push',(e)=>{
