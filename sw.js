@@ -10,7 +10,8 @@ const APP_SHELL=[
 '/index.html',
 'css/styles.css',
 'img/gatito.jpg',
-'js/app.js'
+'js/app.js',
+'pages/offline.html'
 ];
 //Todos aquellos recursos que nunca cambian, nuestros o externos 
 const APP_SHELL_INMUTABLE=[
@@ -33,7 +34,15 @@ self.addEventListener('install',(e)=>{
 
 
 self.addEventListener('activate',(e)=>{
-    console.log('Activado')
+    e.waitUntil(
+        caches.keys().then((keys) => {
+            return Promise.all(keys.map((key) => {
+                if (key !== STATIC && key !== DYNAMIC && key !== INMUTABLE) {
+                    return caches.delete(key);
+                }
+            }));
+        })
+    );
 })
 
 
@@ -43,9 +52,9 @@ self.addEventListener('fetch',(e)=>{
     // e.respondWith(fetch('img/gatitomiel.jpg'))
     // else e.respondWith(fetch(e.request))
     
-    //1.Cache only
+    //1.Cache only, toda la aplicación va as er servida por el cache
     //e.respondWith(caches.match(e.request))
-    //2. cache with network fallback
+    //2. cache with network fallback/ si el recurso no se encuentra en internet va al caché
     // const source=caches.match(e.request).then((res)=>{
     //     if(res) return res;
     //     return fetch(e.request).then(resFetch =>{
@@ -56,11 +65,11 @@ self.addEventListener('fetch',(e)=>{
     //     });
     // });
     // e.respondWith(source);
-    //3. Network with cache fallback 
+    //3. Network with cache fallback / siempre va a estar actualizada pero cuano no haya internet va a usar el cache
     //lo contrario a la segunda 
     // const source=fetch(e.request).then(res=>{
     //     if(!res) throw Error('NotFound');
-    //     //checar si el recurso existe ne lagun cache
+    //     checar si el recurso existe en la cache
     //     caches.open(DYNAMIC).then(cache=>{
     //         cache.put(e.request, res);
     //     });
@@ -73,7 +82,7 @@ self.addEventListener('fetch',(e)=>{
     //siempre actualizada si hay recurso actualizado devuelve el actual pero lo actualiza al instante
     //usarla cuando tenga un rendimiento critico, si el rendimiento es bajo utilizar esta estrategia
     //Desventaja es que toda la app esta un paso atras. 
-    // if(e.request.url.includes('boostrap'))
+    // if(e.request.url.includes('/pages/offline.html'))
     // return e.respondWith(caches.match(e.request));
     // const source= caches.open(STATIC).then(cache=>{
     //     fetch(e.request).then(res=>{
@@ -83,30 +92,66 @@ self.addEventListener('fetch',(e)=>{
     // });
     // e.respondWith(source);
 
-    //Cache and network race
-    const source= new Promise((resolve, reject)=>{
-        let reject= false;
-        const failsOnce=()=>{
-            if(reject){
-                if(/\.(png|jpg))/i.test(e.request.url)){
-                    resolve(caches.match('/img/not-found.png'))
-                }else{
-                    reject('SourceNotFound')
-                }
+   // Cache and network race
+    // const source= new Promise((resolve, reject)=>{
+    //     let reject= false;
+    //     const failsOnce=()=>{
+    //         if(reject){
+    //             if(/\.(png|jpg))/i.test(e.request.url)){
+    //                 resolve(caches.match('/img/not-found.png'))
+    //             }else{
+    //                 reject('SourceNotFound')
+    //             }
+    //             if(e.request.url.includes('page2.html'))
+    //             resolve(caches.match('pages/offline.html'))
 
-            }else{
-                reject=true;
-            }
-        };
-        fetch(e.request).then(res=>{
-            res.ok ? resolve(res): failsOnce();
-        }).catch(failsOnce);
-        caches.match(e.request).then(cacheRes=>{
-            cacheRes.ok ? resolve(cacheRes): failsOnce();
-        })
-        .catch(failsOnce);
-    })
-        e.respondWith(source);
+    //         }else{
+    //             reject=true;
+    //         }
+    //     };
+    //     fetch(e.request).then(res=>{
+    //         res.ok ? resolve(res): failsOnce();
+    //     }).catch(failsOnce);
+    //     caches.match(e.request).then(cacheRes=>{
+    //         cacheRes.ok ? resolve(cacheRes): failsOnce();
+    //     })
+    //     .catch(failsOnce);
+    // })
+    //     e.respondWith(source);
+
+//     const source = fetch(e.request)
+//     .then((res) => {
+//         caches.open(DYNAMIC).then((cache) => {
+//             cache.put(e.request, res.clone());
+//         });
+//         return res;
+//     })
+//     .catch((err) => {
+//         return caches.match(e.request).then((cachedRes) => {
+//             if (cachedRes) {
+//                 return cachedRes;
+//             } else {
+//                 return caches.match("pages/offline.html");
+//             }
+//         });
+//     });
+
+// e.respondWith(source);
+
+const source = caches.match(e.request).then((res) => {
+    if (res) return res;
+    return fetch(e.request).then(resFetch => {
+        if (e.request.url.includes('/index.html')) {
+            caches.open(DYNAMIC).then(cache => {
+                cache.put(e.request, resFetch.clone());
+            });
+        }
+        return resFetch.clone();
+    }).catch(error => {
+        return caches.match('pages/offline.html');
+    });
+});
+e.respondWith(source);
 })
 
 // self.addEventListener('push',(e)=>{
